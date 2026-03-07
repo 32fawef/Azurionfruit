@@ -1,14 +1,7 @@
 --[[
-    ZURION SUPREME v106 - "STABLE HYBRID"
-    -----------------------------------------------------------
-    ✅ AUTO-AIM: Sistema RIVALS (funcionando)
-    ✅ AUTO-SHOT: Disparo automático (funcionando)
-    ✅ ESP: Sistema v102 (sem bugs)
-    ✅ WHITELIST: Sistema v102 (funcionando)
-    ✅ FLY: Sistema RIVALS (estável)
-    ✅ NOCLIP: Sistema v102 (funcionando)
-    ✅ UI: Melhorada
-    -----------------------------------------------------------
+    ZURION SUPREME v124 - DISCORD LINK CORRIGIDO
+    ✅ Botão Discord funciona corretamente
+    ✅ Link válido e direto
 ]]--
 
 local Players = game:GetService("Players")
@@ -25,12 +18,17 @@ local CONFIG = {
     COMBAT = {
         ENABLED = false,
         AUTO_SHOOT = false,
-        FOV = 250,
-        SMOOTH = 1.5,
-        PRED = 0.15,
+        FOV = 280,
+        SMOOTH = 0.75,
+        SNAP_DIST = 55,
+        PRED = 0.12,
         PART = "Head",
         WALL_CHECK = true,
-        AUTO_SHOOT_DELAY = 0.08
+        USE_RAYCAST = true,
+        AUTO_SHOOT_DELAY = 0.08,
+        PROXIMITY_RANGE = 1000,
+        PROXIMITY_BLOCK = 7,
+        MAX_DISTANCE = 1000,
     },
     VISUALS = {
         ENABLED = false,
@@ -45,11 +43,14 @@ local CONFIG = {
         FLY_ENABLED = false,
         FLY_SPEED = 180,
         NOCLIP = false,
-        KEYS = {W = false, S = false, A = false, D = false, UP = false, DOWN = false}
+        SPEED_ENABLED = false,
+        SPEED_VALUE = 50,
+        SUPERJUMP_ENABLED = false,
+        SUPERJUMP_POWER = 100,
+        KEYS = {W = false, S = false, A = false, D = false, SPACE = false}
     },
     MENU = {
         ACCENT = Color3.fromRGB(0, 170, 255),
-        ACCENT_DARK = Color3.fromRGB(0, 120, 200),
         BG = Color3.fromRGB(10, 10, 15),
         SECONDARY = Color3.fromRGB(18, 18, 25),
         TERTIARY = Color3.fromRGB(25, 25, 35)
@@ -58,23 +59,21 @@ local CONFIG = {
 
 local WHITELIST = {}
 local UI_PAGES = {}
-local DRAWINGS = {ESP = {}, FOV = nil}
+local DRAWINGS = {ESP = {}}
 local LAST_SHOT_TIME = 0
 local CURRENT_TARGET = nil
+local PANEL_OPEN = true
+local NEARBY_PLAYERS_COUNT = 0
+local AIMBOT_BLOCKED = false
+local LAST_JUMP_TIME = 0
 
--- [ UI PROTECTION ]
+-- [ UI SETUP ]
 local Screen = Instance.new("ScreenGui")
-Screen.Name = "Zurion_v106_Stable"
+Screen.Name = "Zurion_v124_RivalsAimbot"
 Screen.ResetOnSpawn = false
 Screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-pcall(function()
-    Screen.Parent = CoreGui
-end)
-
-if Screen.Parent == nil then
-    Screen.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+pcall(function() Screen.Parent = CoreGui end)
+if Screen.Parent == nil then Screen.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 
 -- [ FOV CIRCLE ]
 local FOV_CIRCLE = Drawing.new("Circle")
@@ -86,7 +85,15 @@ FOV_CIRCLE.Visible = false
 FOV_CIRCLE.Color = CONFIG.MENU.ACCENT
 FOV_CIRCLE.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
 
--- [ ESP BUILDER - VERSÃO ESTÁVEL ]
+-- [ STATUS TEXT ]
+local StatusText = Drawing.new("Text")
+StatusText.Size = 18
+StatusText.Color = Color3.fromRGB(0, 170, 255)
+StatusText.Position = Vector2.new(10, 10)
+StatusText.Visible = true
+StatusText.Text = "Players: 0"
+
+-- [ ESP BUILDER ]
 local function CreateESP(p)
     if DRAWINGS.ESP[p] then return end
     DRAWINGS.ESP[p] = {
@@ -141,16 +148,36 @@ SideGradient.Color = ColorSequence.new({
 })
 
 local Logo = Instance.new("TextLabel", Sidebar)
-Logo.Size = UDim2.new(1, 0, 0, 120)
-Logo.Text = "⚡ ZURION\nSUPREME v106"
+Logo.Size = UDim2.new(1, 0, 0, 90)
+Logo.Text = "⚡ ZURION\nv124"
 Logo.Font = "GothamBold"
-Logo.TextSize = 24
+Logo.TextSize = 22
 Logo.TextColor3 = CONFIG.MENU.ACCENT
 Logo.BackgroundTransparency = 1
 
+-- [ DISCORD BUTTON - CORRIGIDO ]
+local DiscordBtn = Instance.new("TextButton", Sidebar)
+DiscordBtn.Size = UDim2.new(1, -10, 0, 50)
+DiscordBtn.Position = UDim2.new(0, 5, 0, 95)
+DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+DiscordBtn.Text = "💬 DISCORD SERVER"
+DiscordBtn.Font = "GothamBold"
+DiscordBtn.TextColor3 = Color3.new(1, 1, 1)
+DiscordBtn.TextSize = 12
+DiscordBtn.BorderSizePixel = 0
+Instance.new("UICorner", DiscordBtn).CornerRadius = UDim.new(0, 8)
+
+-- ✅ CORRIGIDO: Link do Discord funciona agora
+DiscordBtn.MouseButton1Click:Connect(function()
+    pcall(function()
+        -- ✅ Método 1: Tentar abrir diretamente no Discord
+        game:GetService("GuiService"):OpenBrowserWindow("https://discord.gg/fnRvBUDx9s")
+    end)
+end)
+
 local TabContainer = Instance.new("Frame", Sidebar)
-TabContainer.Size = UDim2.new(1, 0, 1, -140)
-TabContainer.Position = UDim2.new(0, 0, 0, 130)
+TabContainer.Size = UDim2.new(1, 0, 1, -155)
+TabContainer.Position = UDim2.new(0, 0, 0, 155)
 TabContainer.BackgroundTransparency = 1
 local TabLayout = Instance.new("UIListLayout", TabContainer)
 TabLayout.HorizontalAlignment = "Center"
@@ -317,112 +344,194 @@ NewTab("VISUALS", VisualPg)
 NewTab("MOVEMENT", MovePg)
 NewTab("WHITELIST", WLPg)
 
--- [ TARGETING - RIVALS SYSTEM ]
-local function CheckLineOfSight(from, to)
-    local direction = (to - from)
-    local distance = direction.Magnitude
-    if distance == 0 then return false end
-    
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
-    
-    local result = workspace:Raycast(from, direction.Unit * distance, raycastParams)
-    return result == nil
-end
+-- ============================================================
+-- ✅ SISTEMA DE PROXIMIDADE
+-- ============================================================
 
-local function GetClosestTarget()
-    local target = nil
-    local shortestDist = CONFIG.COMBAT.FOV
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+local function CountNearbyPlayers()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return 0
+    end
     
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            if WHITELIST[player.Name] then continue end
-            
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local head = player.Character:FindFirstChild(CONFIG.COMBAT.PART)
-            
-            if not head or not humanoid or humanoid.Health <= 0 then continue end
-            
-            local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-            if not onScreen then continue end
-            
-            if CONFIG.COMBAT.WALL_CHECK then
-                if not CheckLineOfSight(Camera.CFrame.Position, head.Position) then continue end
-            end
-            
-            local screenDistance = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-            if screenDistance < shortestDist then
-                shortestDist = screenDistance
-                target = head
+    local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+    local count = 0
+    
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (p.Character.HumanoidRootPart.Position - playerPos).Magnitude
+            if distance <= CONFIG.COMBAT.PROXIMITY_RANGE then
+                count += 1
             end
         end
     end
     
-    return target
+    return count
 end
 
--- [ AIMBOT - MOUSE DELTA ]
-local function AimAt(target)
-    if not target then return end
+local function UpdateProximityStatus()
+    NEARBY_PLAYERS_COUNT = CountNearbyPlayers()
     
-    local vel = target.Parent.PrimaryPart and target.Parent.PrimaryPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
-    local predictedPos = target.Position + (vel * CONFIG.COMBAT.PRED)
-    
-    local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
-    if onScreen then
-        local mousePos = UIS:GetMouseLocation()
-        local deltaX = (screenPos.X - mousePos.X)
-        local deltaY = (screenPos.Y - mousePos.Y)
-        
-        local smoothScale = CONFIG.COMBAT.SMOOTH
-        mousemoverel(deltaX / smoothScale, deltaY / smoothScale)
+    if NEARBY_PLAYERS_COUNT >= CONFIG.COMBAT.PROXIMITY_BLOCK then
+        AIMBOT_BLOCKED = true
+        StatusText.Color = Color3.fromRGB(255, 0, 0)
+        StatusText.Text = "🚫 Players: " .. NEARBY_PLAYERS_COUNT .. " | AIMBOT BLOQUEADO"
+    else
+        AIMBOT_BLOCKED = false
+        StatusText.Color = Color3.fromRGB(0, 255, 0)
+        StatusText.Text = "✅ Players: " .. NEARBY_PLAYERS_COUNT .. " | AIMBOT ATIVO"
     end
 end
 
--- [ AUTO SHOOT ]
-local function TriggerShoot()
+-- ============================================================
+-- ✅ AIMBOT COM LIMITE DE DISTÂNCIA 1000M
+-- ============================================================
+
+local function GetTarget()
+    local best = nil
+    local dist = CONFIG.COMBAT.FOV
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return nil, dist
+    end
+    
+    local playerPos = LocalPlayer.Character.HumanoidRootPart.Position
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and not WHITELIST[p.Name] and p.Character then
+            local head = p.Character:FindFirstChild(CONFIG.COMBAT.PART)
+            local hum = p.Character:FindFirstChild("Humanoid")
+            local root = p.Character:FindFirstChild("HumanoidRootPart")
+            
+            if head and hum and hum.Health > 0 and root then
+                local distance3D = (root.Position - playerPos).Magnitude
+                
+                if distance3D > CONFIG.COMBAT.MAX_DISTANCE then
+                    continue
+                end
+                
+                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local mag = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if mag < dist then
+                        if CONFIG.COMBAT.USE_RAYCAST then
+                            local ray = workspace:Raycast(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * 1000, RaycastParams.new())
+                            if ray and not ray.Instance:IsDescendantOf(p.Character) then continue end
+                        end
+                        dist = mag
+                        best = head
+                    end
+                end
+            end
+        end
+    end
+    return best, dist
+end
+
+local function AimbotProfissional(dt)
+    if AIMBOT_BLOCKED then return end
+    if not CONFIG.COMBAT.ENABLED then return end
+    
+    local target, pixelDist = GetTarget()
+    if not target then 
+        CURRENT_TARGET = nil
+        return 
+    end
+    
+    CURRENT_TARGET = target
+    
+    local velocity = target.Parent.PrimaryPart and target.Parent.PrimaryPart.AssemblyLinearVelocity or Vector3.new(0,0,0)
+    local predictedPos = target.Position + (velocity * CONFIG.COMBAT.PRED)
+    
+    local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+    if not onScreen then return end
+    
+    local smoothValue = CONFIG.COMBAT.SMOOTH
+    if pixelDist < CONFIG.COMBAT.SNAP_DIST then
+        smoothValue = 1.0
+    end
+    
+    local factor = math.clamp(smoothValue * (dt * 65), 0, 1)
+    Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, predictedPos), factor)
+end
+
+-- ============================================================
+-- ✅ AUTO-SHOOT
+-- ============================================================
+
+RunService.Heartbeat:Connect(function()
+    if AIMBOT_BLOCKED then return end
+    if not CONFIG.COMBAT.ENABLED then return end
     if not CONFIG.COMBAT.AUTO_SHOOT then return end
+    if not CURRENT_TARGET then return end
     
     local currentTime = tick()
-    if currentTime - LAST_SHOT_TIME < CONFIG.COMBAT.AUTO_SHOOT_DELAY then return end
+    if currentTime - LAST_SHOT_TIME >= CONFIG.COMBAT.AUTO_SHOOT_DELAY then
+        LAST_SHOT_TIME = currentTime
+        
+        mouse1press()
+        task.wait(0.001)
+        mouse1release()
+    end
+end)
+
+-- ============================================================
+-- ✅ SPEED
+-- ============================================================
+
+local function UpdateSpeedMovement()
+    if not CONFIG.MOVEMENT.SPEED_ENABLED then return end
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
     
-    LAST_SHOT_TIME = currentTime
+    local root = LocalPlayer.Character.HumanoidRootPart
+    local moveDirection = Vector3.new(0, 0, 0)
     
-    task.spawn(function()
-        pcall(function()
-            mouse1press()
-            task.wait(0.01)
-            mouse1release()
-        end)
-    end)
+    if CONFIG.MOVEMENT.KEYS.W then moveDirection = moveDirection + Camera.CFrame.LookVector end
+    if CONFIG.MOVEMENT.KEYS.S then moveDirection = moveDirection - Camera.CFrame.LookVector end
+    if CONFIG.MOVEMENT.KEYS.A then moveDirection = moveDirection - Camera.CFrame.RightVector end
+    if CONFIG.MOVEMENT.KEYS.D then moveDirection = moveDirection + Camera.CFrame.RightVector end
+    
+    if moveDirection.Magnitude > 0 then
+        root.Velocity = moveDirection.Unit * CONFIG.MOVEMENT.SPEED_VALUE
+    end
+end
+
+-- ============================================================
+-- ✅ SUPER JUMP
+-- ============================================================
+
+local function UpdateSuperJump()
+    if not CONFIG.MOVEMENT.SUPERJUMP_ENABLED then return end
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local root = LocalPlayer.Character.HumanoidRootPart
+    local currentTime = tick()
+    
+    if CONFIG.MOVEMENT.KEYS.SPACE and (currentTime - LAST_JUMP_TIME) > 0.5 then
+        LAST_JUMP_TIME = currentTime
+        root.AssemblyLinearVelocity = root.AssemblyLinearVelocity + Vector3.new(0, CONFIG.MOVEMENT.SUPERJUMP_POWER, 0)
+    end
 end
 
 -- [ RENDER LOOP ]
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
+    if not LocalPlayer.Character then return end
+    
+    UpdateProximityStatus()
+    
     FOV_CIRCLE.Radius = CONFIG.COMBAT.FOV
     FOV_CIRCLE.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
-    -- NOCLIP
-    if CONFIG.MOVEMENT.NOCLIP and LocalPlayer.Character then
+    if CONFIG.MOVEMENT.NOCLIP then
         for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.CanCollide = false
-            end
+            if v:IsA("BasePart") then v.CanCollide = false end
         end
     end
     
-    -- AIMBOT
-    if CONFIG.COMBAT.ENABLED then
-        CURRENT_TARGET = GetClosestTarget()
-        if CURRENT_TARGET then
-            AimAt(CURRENT_TARGET)
-            TriggerShoot()
-        end
-    end
+    UpdateSpeedMovement()
+    UpdateSuperJump()
+    AimbotProfissional(dt)
     
-    -- FLY
     if CONFIG.MOVEMENT.FLY_ENABLED and LocalPlayer.Character then
         local r = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if r then
@@ -436,7 +545,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- ESP RENDER
     for p, d in pairs(DRAWINGS.ESP) do
         if CONFIG.VISUALS.ENABLED and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local root = p.Character.HumanoidRootPart
@@ -501,7 +609,7 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- [ WHITELIST UPDATER ]
+-- [ WHITELIST ]
 local function RefreshWL()
     for _, c in pairs(WLPg:GetChildren()) do
         if c:IsA("Frame") then c:Destroy() end
@@ -556,9 +664,16 @@ NewToggle(CombatPg, "🔫 Auto-Shot", CONFIG.COMBAT, "AUTO_SHOOT")
 NewSlider(CombatPg, "⏱️ Shot Delay (ms)", 10, 500, CONFIG.COMBAT, "AUTO_SHOOT_DELAY", function(v)
     CONFIG.COMBAT.AUTO_SHOOT_DELAY = v / 1000
 end)
-NewSlider(CombatPg, "🎪 Smoothness", 0.5, 10, CONFIG.COMBAT, "SMOOTH")
-NewSlider(CombatPg, "👁️ Field of View", 50, 800, CONFIG.COMBAT, "FOV")
-NewToggle(CombatPg, "🚧 Wall Check", CONFIG.COMBAT, "WALL_CHECK")
+NewSlider(CombatPg, "🎪 Smoothness", 0.1, 5, CONFIG.COMBAT, "SMOOTH", function(v)
+    CONFIG.COMBAT.SMOOTH = v / 10
+end)
+NewSlider(CombatPg, "👁️ FOV", 50, 800, CONFIG.COMBAT, "FOV")
+NewSlider(CombatPg, "📍 Snap Distance", 10, 200, CONFIG.COMBAT, "SNAP_DIST")
+NewSlider(CombatPg, "🔮 Predição", 0.01, 0.5, CONFIG.COMBAT, "PRED", function(v)
+    CONFIG.COMBAT.PRED = v / 100
+end)
+NewSlider(CombatPg, "📏 Max Distance (m)", 500, 2000, CONFIG.COMBAT, "MAX_DISTANCE")
+NewToggle(CombatPg, "🚧 Wall Check", CONFIG.COMBAT, "USE_RAYCAST")
 
 -- [ UI ELEMENTS - VISUALS ]
 NewToggle(VisualPg, "👁️ ESP Master", CONFIG.VISUALS, "ENABLED")
@@ -571,10 +686,14 @@ NewToggle(VisualPg, "📐 Show Distance", CONFIG.VISUALS, "DISTANCE_TEXT")
 NewToggle(MovePg, "👻 Noclip", CONFIG.MOVEMENT, "NOCLIP")
 NewToggle(MovePg, "🚀 Flight", CONFIG.MOVEMENT, "FLY_ENABLED")
 NewSlider(MovePg, "⚡ Fly Speed", 50, 500, CONFIG.MOVEMENT, "FLY_SPEED")
+NewToggle(MovePg, "💨 Speed", CONFIG.MOVEMENT, "SPEED_ENABLED")
+NewSlider(MovePg, "💨 Speed Value", 20, 200, CONFIG.MOVEMENT, "SPEED_VALUE")
+NewToggle(MovePg, "⬆️ Super Jump", CONFIG.MOVEMENT, "SUPERJUMP_ENABLED")
+NewSlider(MovePg, "⬆️ Jump Power", 25, 300, CONFIG.MOVEMENT, "SUPERJUMP_POWER")
 
--- [ OPEN BUTTON ]
+-- [ BUTTONS ]
 local Z = Instance.new("TextButton", Screen)
-Z.Name = "ZurionOpen"
+Z.Name = "ZurionToggle"
 Z.Size = UDim2.new(0, 70, 0, 70)
 Z.Position = UDim2.new(0, 5, 0.5, -35)
 Z.BackgroundColor3 = CONFIG.MENU.BG
@@ -590,16 +709,24 @@ ZStroke.Thickness = 2
 
 Z.MouseButton1Click:Connect(function()
     Main.Visible = not Main.Visible
+    PANEL_OPEN = Main.Visible
 end)
 
 -- [ INPUTS ]
 UIS.InputBegan:Connect(function(i, g)
     if g then return end
+    
+    if i.KeyCode == Enum.KeyCode.Insert then
+        Main.Visible = not Main.Visible
+        PANEL_OPEN = Main.Visible
+        return
+    end
+    
     if i.KeyCode == Enum.KeyCode.W then CONFIG.MOVEMENT.KEYS.W = true end
     if i.KeyCode == Enum.KeyCode.S then CONFIG.MOVEMENT.KEYS.S = true end
     if i.KeyCode == Enum.KeyCode.A then CONFIG.MOVEMENT.KEYS.A = true end
     if i.KeyCode == Enum.KeyCode.D then CONFIG.MOVEMENT.KEYS.D = true end
-    if i.KeyCode == Enum.KeyCode.Insert then Main.Visible = not Main.Visible end
+    if i.KeyCode == Enum.KeyCode.Space then CONFIG.MOVEMENT.KEYS.SPACE = true end
 end)
 
 UIS.InputEnded:Connect(function(i)
@@ -607,36 +734,38 @@ UIS.InputEnded:Connect(function(i)
     if i.KeyCode == Enum.KeyCode.S then CONFIG.MOVEMENT.KEYS.S = false end
     if i.KeyCode == Enum.KeyCode.A then CONFIG.MOVEMENT.KEYS.A = false end
     if i.KeyCode == Enum.KeyCode.D then CONFIG.MOVEMENT.KEYS.D = false end
+    if i.KeyCode == Enum.KeyCode.Space then CONFIG.MOVEMENT.KEYS.SPACE = false end
 end)
 
 -- [ DRAGGABLE ]
-local d, ds, sp
+local dragging = false
+local dragStart = nil
+local panelStart = nil
+
 Main.InputBegan:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        d = true
-        ds = i.Position
-        sp = Main.Position
+        dragging = true
+        dragStart = i.Position
+        panelStart = Main.Position
     end
 end)
 
 Main.InputChanged:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseMovement and d then
-        local dl = i.Position - ds
-        Main.Position = UDim2.new(sp.X.Scale, sp.X.Offset + dl.X, sp.Y.Scale, sp.Y.Offset + dl.Y)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position - dragStart
+        Main.Position = UDim2.new(panelStart.X.Scale, panelStart.X.Offset + delta.X, panelStart.Y.Scale, panelStart.Y.Offset + delta.Y)
     end
 end)
 
 UIS.InputEnded:Connect(function(i)
     if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        d = false
+        dragging = false
     end
 end)
 
 -- [ INIT ]
 for _, p in pairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then
-        CreateESP(p)
-    end
+    if p ~= LocalPlayer then CreateESP(p) end
 end
 
 Players.PlayerAdded:Connect(function(p)
@@ -649,5 +778,5 @@ Players.PlayerRemoving:Connect(RefreshWL)
 RefreshWL()
 CombatPg.Visible = true
 
-print("✅ ZURION v106 - STABLE HYBRID LOADED")
-print("🎯 Auto-Aim | 🔫 Auto-Shot | 👁️ ESP | 🚀 Fly | 👻 Noclip | 👥 Whitelist")
+print("✅ ZURION v124 - DISCORD LINK CORRIGIDO")
+print("💬 Discord: https://discord.gg/fnRvBUDx9s")
